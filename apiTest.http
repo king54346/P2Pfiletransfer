@@ -1,0 +1,37 @@
+### GET request to example server
+GET https://examples.http-client.intellij.net/get
+    ?generated-in=RustRover
+
+###
+POST http://localhost:3000/json
+Content-Type: application/json
+
+{
+  "asdf": false
+}
+###
+POST http://localhost:3000/api/ice
+Content-Type: application/json
+
+###
+POST http://localhost:3000/api/fetch
+Content-Type: application/json
+
+{
+  "slug": "0m24jzaj"
+}
+
+
+
+###
+GET http://localhost:3000/api/configs
+
+###
+POST http://localhost:3000/pets
+Content-Type: application/json
+
+{
+  "name": "name1",
+  "status":"String",
+  "category": "String"
+}

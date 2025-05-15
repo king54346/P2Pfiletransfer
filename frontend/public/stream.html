@@ -1,0 +1,180 @@
+<!--
+  https://github.com/jimmywarting/StreamSaver.js/blob/master/mitm.html
+
+mitm.html 是一个轻量级的“中间人” 通过iframe hadden 引入在页面中
+
+它的主要作用是向 service worker 发送 opener 的 messageChannel 信号——
+完成后可以关闭此 mitm，但最好保持其运行，
+因为这也可以防止 service worker 重启。
+
+service worker 能够拦截所有请求并伪造它们的“虚假”响应——
+我们将要构建这些响应。当 worker 接收到流时，
+它会通知 opener 打开一个链接以启动下载。
+-->
+<script>
+// 保持服务工作线程(Service Worker)活跃状态
+// 工作线程如果空闲一段时间, 就会被浏览器关闭
+// Service Worker 是浏览器在后台独立于网页运行的脚本，即使关闭所有相关标签页，它仍可能继续存活一段时间
+let keepAlive = () => {
+  keepAlive = () => {}
+  var ping = location.href.substr(0, location.href.lastIndexOf('/')) + '/ping'
+    console.log(ping)
+  var interval = setInterval(() => {
+    if (sw) {
+      sw.postMessage('ping')
+    } else {
+      fetch(ping).then(res => res.text(!res.ok && clearInterval(interval)))
+    }
+  }, 10000)
+}
+
+
+// Service Worker 注册是异步，在 Service Worker 注册和激活之前，先把所有收到的消息暂存起来，等 Service Worker 就绪后再统一处理这些消息，避免消息丢失。
+let messages = []
+window.onmessage = evt => messages.push(evt)
+
+// Service Worker 实例
+let sw = null
+//  Service Worker 的作用域
+let scope = ''
+
+// 注册子窗口Service Worker
+function registerWorker() {
+    //  尝试获取当前作用域下已注册的 Service Worker
+  return navigator.serviceWorker.getRegistration('./').then(swReg => {
+    // 如果没有注册的 Service Worker，则注册一个新的
+    return swReg || navigator.serviceWorker.register('sw.js', { scope: './' })
+  }).then(swReg => {
+    // 如果 Service Worker 处于安装中（installing）或等待中（waiting）状态，则监听其 statechange 事件，直到状态变为 activated。
+    const swRegTmp = swReg.installing || swReg.waiting
+    // 存储 SW 的作用域
+    scope = swReg.scope
+    // 如果 SW 已经激活就直接返回，否则监听 statechange 事件等待激活
+    return (sw = swReg.active) || new Promise(resolve => {
+      swRegTmp.addEventListener('statechange', fn = () => {
+        if (swRegTmp.state === 'activated') {
+          swRegTmp.removeEventListener('statechange', fn)
+          sw = swReg.active
+          resolve()
+        }
+      })
+    })
+  })
+}
+
+// 收来自其他窗口或页面的消息，并将这些消息传递给已注册的 Service Worker
+function onMessage (event) {
+  let { data, ports, origin } = event
+
+  // 检查消息是否包含 ports（消息通道）以及是否是一个对象。如果不符合要求，会抛出错误
+  if (!ports || !ports.length) {
+    throw new TypeError("[StreamSaver] You didn't send a messageChannel")
+  }
+
+  if (typeof data !== 'object') {
+    throw new TypeError("[StreamSaver] You didn't send a object")
+  }
+
+  // 将消息中的 origin（来源）和 referrer（引用者）添加到数据中，用于标识消息的来源
+  // the default public service worker for StreamSaver is shared among others.
+  // so all download links needs to be prefixed to avoid any other conflict
+  data.origin = origin
+
+  // if we ever (in some feature versoin of streamsaver) would like to
+  // redirect back to the page of who initiated a http request
+  data.referrer = data.referrer || document.referrer || origin
+
+  // pass along version for possible backwards compatibility in sw.js
+  data.streamSaverVersion = new URLSearchParams(location.search).get('version')
+  //   检查 data.streamSaverVersion，如果版本是旧的（如 1.2.0），会发出警告
+  if (data.streamSaverVersion === '1.2.0') {
+    console.warn('[StreamSaver] please update streamsaver')
+  }
+    /**
+     * 数据校验：
+     *
+     *
+     * 检查 data.headers 是否存在并且格式正确。
+     * 检查 data.filename 和 data.size，并发出警告，提示这些字段已被弃用。
+     * 如果 data.pathname 不存在，会生成一个随机路径
+     */
+  /** @since v2.0.0 */
+  if (!data.headers) {
+    console.warn("[StreamSaver] pass `data.headers` that you would like to pass along to the service worker\nit should be a 2D array or a key/val object that fetch's Headers api accepts")
+  } else {
+    // test if it's correct
+    // should thorw a typeError if not
+    new Headers(data.headers)
+  }
+
+  /** @since v2.0.0 */
+  if (typeof data.filename === 'string') {
+    console.warn("[StreamSaver] You shouldn't send `data.filename` anymore. It should be included in the Content-Disposition header option")
+    // Do what File constructor do with fileNames
+    data.filename = data.filename.replace(/\//g, ':')
+  }
+
+  /** @since v2.0.0 */
+  if (data.size) {
+    console.warn("[StreamSaver] You shouldn't send `data.size` anymore. It should be included in the content-length header option")
+  }
+
+  /** @since v2.0.0 */
+  if (data.readableStream) {
+    console.warn("[StreamSaver] You should send the readableStream in the messageChannel, not throught mitm")
+  }
+
+  /** @since v2.0.0 */
+  if (!data.pathname) {
+    console.warn("[StreamSaver] Please send `data.pathname` (eg: /pictures/summer.jpg)")
+    data.pathname = Math.random().toString().slice(-6) + '/' + data.filename
+  }
+
+  // 路径和 URL 处理 移除路径中的多余斜杠。生成一个完整的下载 URL，并确保其符合预期的格式。
+  data.pathname = data.pathname.replace(/^\/+/g, '')
+
+  // remove protocol
+  let org = origin.replace(/(^\w+:|^)\/\//, '')
+
+  // set the absolute pathname to the download url.
+  data.url = new URL(`${scope + org}/${data.pathname}`).toString()
+
+  if (!data.url.startsWith(`${scope + org}/`)) {
+    throw new TypeError('[StreamSaver] bad `data.pathname`')
+  }
+
+  // 把消息数据（data）以及 messageChannel 的 port2 端口一起发送给 Service Worker。
+  // Service Worker 收到 port2 后，可以通过 postMessage 方法回复消息，
+    // 这样回复的消息会触发 messageChannel.port1 的 onmessage 事件处理函数，实现页面和 Service Worker 之间的双向通信。
+  const transferable = data.readableStream
+    ? [ ports[0], data.readableStream ]
+    : [ ports[0] ]
+
+  if (!(data.readableStream || data.transferringReadable)) {
+    keepAlive()
+  }
+
+  return sw.postMessage(data, transferable)
+}
+
+
+// 如果当前窗口确实是由另一个窗口打开的，即存在 window.opener,StreamSaver.js会通过addEventListener('message', callback)接收 postMessage 消息
+if (window.opener) {
+    console.log("[StreamSaver] loaded popup")
+    window.opener.postMessage('StreamSaver::loadedPopup', '*')
+}
+
+// Service Worker 注册与消息处理
+if (navigator.serviceWorker) {
+  registerWorker().then(() => {
+    window.onmessage = onMessage
+      // 将收集的消息发送给 Service Worker
+      messages.forEach(window.onmessage)
+  })
+} else {
+  console.log("[StreamSaver] no service worker support")
+  console.log(navigator.serviceWorker)
+  keepAlive()
+}
+
+</script>
