@@ -31,7 +31,7 @@ pub async fn fetch(State(repo): State<Arc<dyn ChannelRepo>>, Json(payload): Json
         }
     };
     // 尝试获取频道
-    match repo.fetch_channel(token, false).await {
+    match repo.fetch_channel(token).await {
         Ok(channel) => {
             // 成功找到频道
             (StatusCode::OK, Json(channel)).into_response()
@@ -54,6 +54,7 @@ pub async fn fetch(State(repo): State<Arc<dyn ChannelRepo>>, Json(payload): Json
 #[derive(Deserialize)]
 pub struct CreateChannelRequest {
     uploaderPeerID: Option<String>,
+    algorithm: Option<usize>,
 }
 pub async fn create(
     State(repo): State<Arc<dyn ChannelRepo>>,
@@ -72,9 +73,21 @@ pub async fn create(
                 .into_response();
         }
     };
-
+    
+    let algorithm = match payload.algorithm {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "algorithm is required".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
     // 调用 createChannel 方法
-    match repo.create_channel(uploader_peer_id).await {
+    match repo.create_channel(uploader_peer_id,algorithm).await {
         Ok(channel) => {
             // 成功创建频道，直接返回
             (StatusCode::OK, Json(channel)).into_response()
@@ -146,7 +159,6 @@ pub async fn destroy(
 #[derive(Deserialize)]
 pub struct RenewChannelRequest {
     token: Option<String>,
-    secret: Option<String>,
 }
 
 
@@ -171,23 +183,8 @@ pub async fn renew(
                 .into_response();
         }
     };
-
-    // 检查 secret 是否存在
-    let secret = match payload.secret {
-        Some(secret) => secret,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "Secret is required".to_string(),
-                }),
-            )
-                .into_response();
-        }
-    };
-
     // 调用 renewChannel 方法
-    let success = repo.renew_channel(token, secret).await.unwrap_or_else(|err| {
+    let success = repo.renew_channel(token).await.unwrap_or_else(|err| {
         eprintln!("Failed to renew channel: {:?}", err);
         false
     });

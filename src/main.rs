@@ -113,3 +113,83 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use std::fs::File;
+    use std::{env, io, thread};
+    use std::io::{BufReader, BufWriter, Read, Write};
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+    use tokio::test;
+    use tokio::time::Instant;
+
+    // 从标准输入压缩到标准输出
+    fn compress(level: i32) {
+        eprintln!("从标准输入压缩到标准输出 (级别: {})", level);
+
+        // 使用zstd官方库的流式压缩
+        match zstd::stream::copy_encode(io::stdin(), io::stdout(), level) {
+            Ok(_) => {},
+            Err(e) => eprintln!("压缩错误: {}", e)
+        }
+    }
+
+    // 从标准输入解压到标准输出
+    fn decompress() {
+        eprintln!("从标准输入解压到标准输出");
+
+        // 使用zstd官方库的流式解压
+        match zstd::stream::copy_decode(io::stdin(), io::stdout()) {
+            Ok(_) => {},
+            Err(e) => eprintln!("解压错误: {}", e)
+        }
+    }
+    
+    #[tokio::test]
+    async fn test() {
+        // 计时
+        let start = Instant::now();
+
+        // 解析命令行参数
+        let args: Vec<String> = env::args().collect();
+        println!( "命令行参数: {:?}", args);
+        match args[1].as_str() {
+            "-d" => {
+                decompress();
+            },
+            option => {
+                // 压缩模式
+                if option.starts_with('-') {
+                    let level = match option[1..].parse::<i32>() {
+                        Ok(level) => level,
+                        Err(e) => {
+                            eprintln!("错误: 无效的压缩级别 '{}': {}", option, e);
+                            return;
+                        }
+                    };
+                    compress(level);
+                } else {
+                    eprintln!("错误: 无效的选项 '{}'", option);
+                }
+            }
+        }
+
+        // 打印执行时间
+        let duration = start.elapsed();
+        eprintln!("完成! 耗时: {:.2}秒", duration.as_secs_f64());
+    }
+
+}
+
+
+
+
+
+
+
+
+
+

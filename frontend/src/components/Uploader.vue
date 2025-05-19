@@ -143,18 +143,18 @@ const QR_CODE_SIZE = 128
 const props = defineProps({
   files: Array<UploadedFile>,
   password: String,
-  onStop: Function
+  onStop: Function,
+  algorithm: Number
 })
 
 // Peer 连接
 const {peer, stop} = useWebRTCPeer()
 
 // 通道信息
-const {isLoading, error, token,URL} = useUploaderChannel(peer.id)
-
+const {isLoading, error, token,URL} = useUploaderChannel(peer.id,props.algorithm)
 
 // 管理连接
-const connections = useUploaderConnections(peer, props.files, props.password)
+const connections = useUploaderConnections(peer, props.files, props.password,props.algorithm)
 
 
 const activeDownloaders = computed(() => {

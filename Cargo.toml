@@ -39,4 +39,5 @@ anyhow = "1.0.98"
 uuid = { version = "1.16.0", features = ["v4"] }
 serde_yaml = "0.9.34+deprecated"
 mime_guess = "2.0.5"
+zstd = "0.13.3"
 [build-dependencies]

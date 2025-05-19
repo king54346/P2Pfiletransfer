@@ -3,13 +3,11 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use anyhow::anyhow;
 use axum::async_trait;
 use serde::{Deserialize, Serialize};
 use moka::future::Cache;
 use std::sync::LazyLock;
 use rand::{rng, Rng};
-use uuid::uuid;
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     Config {
@@ -38,10 +36,10 @@ struct Config {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
-    secret: Option<String>,
     token: String,
     #[serde(rename = "uploaderPeerID")]
     uploader_peer_id: String,
+    algorithm: usize,
 }
 
 
@@ -74,9 +72,9 @@ pub fn generate_token() -> String {
 
 #[async_trait]
 pub trait ChannelRepo: Send + Sync{
-    async fn create_channel(&self, uploader_peer_id: String) -> anyhow::Result<Channel>;
-    async fn fetch_channel(&self, token: String, scrub_secret: bool) -> anyhow::Result<Channel>;
-    async fn renew_channel(&self, token:String, secret: String) -> anyhow::Result<bool>;
+    async fn create_channel(&self, uploader_peer_id: String,algorithm:usize) -> anyhow::Result<Channel>;
+    async fn fetch_channel(&self, token: String) -> anyhow::Result<Channel>;
+    async fn renew_channel(&self, token:String) -> anyhow::Result<bool>;
     async fn destroy_channel(&self, token: String) -> anyhow::Result<()>;
 }
 
@@ -100,16 +98,16 @@ impl MemoryChannelRepo {
 
 #[async_trait]
 impl ChannelRepo for MemoryChannelRepo {
-    async fn create_channel(&self, uploader_peer_id: String) -> anyhow::Result<Channel> {
+    async fn create_channel(&self, uploader_peer_id: String,algorithm:usize) -> anyhow::Result<Channel> {
         // 生成唯一的短标识符和长标识符
         let token = generate_token_until_unique(|token|async move  {
             self.store.contains_key(&token)
         }).await?;
         
         let channel = Channel {
-            secret: Some(uuid::Uuid::new_v4().to_string()),
             token: token.clone(),
             uploader_peer_id,
+            algorithm,
         };
 
         self.store.insert(token, channel.clone()).await;
@@ -117,17 +115,10 @@ impl ChannelRepo for MemoryChannelRepo {
         Ok(channel)
     }
 
-
-    // 获取频道的方法  scrub_secret表示获取时是否展示密码
-    async fn fetch_channel(&self, token: String, scrub_secret: bool) -> anyhow::Result<Channel> {
+    
+    async fn fetch_channel(&self, token: String) -> anyhow::Result<Channel> {
         if let Some(channel) = self.store.get(&token).await {
-            if scrub_secret {
-                let mut channel_copy = channel.clone();
-                channel_copy.secret = None;
-                Ok(channel_copy)
-            } else {
-                Ok(channel)
-            }
+            Ok(channel)
         }else {
             // 处理未找到通道的情况
             Err(anyhow::anyhow!("Channel not found with token: {}", token))
@@ -135,16 +126,12 @@ impl ChannelRepo for MemoryChannelRepo {
     }
 
 
-    async fn renew_channel(&self, token: String, secret: String) -> anyhow::Result<bool> {
-        let result = self.fetch_channel(token, false).await;
+    async fn renew_channel(&self, token: String) -> anyhow::Result<bool> {
+        let result = self.fetch_channel(token).await;
         match result {
             Ok(value) => {
-                if value.secret != Some(secret) {
-                    Err(anyhow::anyhow!( "Secret does not match"))
-                }else {
-                    self.store.insert(value.token.clone(), value).await;
-                    Ok(true)
-                }
+                self.store.insert(value.token.clone(), value).await;
+                Ok(true)
             }
             Err(e) => {
                Err(anyhow::anyhow!(e.to_string()))
@@ -153,7 +140,7 @@ impl ChannelRepo for MemoryChannelRepo {
     }
 
     async fn destroy_channel(&self, toekn: String) -> anyhow::Result<()> {
-        let result = self.fetch_channel(toekn.clone(), true).await;
+        let result = self.fetch_channel(toekn.clone()).await;
         match result {
             Ok(value) => {
                 self.store.invalidate(&value.token).await;
@@ -184,7 +171,7 @@ mod tests {
         let repo = MemoryChannelRepo::new(config);
 
         let uploader_peer_id = "test_peer_id".to_string();
-        let channel = repo.create_channel(uploader_peer_id.clone()).await.unwrap();
+        let channel = repo.create_channel(uploader_peer_id.clone(),0).await.unwrap();
 
         assert_eq!(channel.uploader_peer_id, uploader_peer_id);
         print!("channel: {:?}", channel);
@@ -196,14 +183,12 @@ mod tests {
         let repo = MemoryChannelRepo::new(config);
 
         let uploader_peer_id = "test_peer_id".to_string();
-        let channel = repo.create_channel(uploader_peer_id.clone()).await.unwrap();
+        let channel = repo.create_channel(uploader_peer_id.clone(),0).await.unwrap();
 
-        let fetched_channel = repo.fetch_channel(channel.token.clone(), false).await.unwrap();
+        let fetched_channel = repo.fetch_channel(channel.token.clone()).await.unwrap();
         assert_eq!(fetched_channel.token, channel.token);
-        assert_eq!(fetched_channel.secret, channel.secret);
 
-        let scrubbed_channel = repo.fetch_channel(channel.token.clone(), true).await.unwrap();
-        assert!(scrubbed_channel.secret.is_none());
+        let scrubbed_channel = repo.fetch_channel(channel.token.clone()).await.unwrap();
     }
 
     #[tokio::test]
@@ -212,12 +197,12 @@ mod tests {
         let repo = MemoryChannelRepo::new(config);
 
         let uploader_peer_id = "test_peer_id".to_string();
-        let channel = repo.create_channel(uploader_peer_id.clone()).await.unwrap();
+        let channel = repo.create_channel(uploader_peer_id.clone(),0).await.unwrap();
 
-        let renewed = repo.renew_channel(channel.token.clone(), channel.secret.clone().unwrap()).await.unwrap();
+        let renewed = repo.renew_channel(channel.token.clone()).await.unwrap();
         assert!(renewed);
 
-        let fetched_channel = repo.fetch_channel(channel.token.clone(), false).await.unwrap();
+        let fetched_channel = repo.fetch_channel(channel.token.clone()).await.unwrap();
         assert_eq!(fetched_channel.token, channel.token);
     }
 
@@ -227,11 +212,11 @@ mod tests {
         let repo = MemoryChannelRepo::new(config);
 
         let uploader_peer_id = "test_peer_id".to_string();
-        let channel = repo.create_channel(uploader_peer_id.clone()).await.unwrap();
+        let channel = repo.create_channel(uploader_peer_id.clone(),0).await.unwrap();
 
         repo.destroy_channel(channel.token.clone()).await.unwrap();
 
-        let result = repo.fetch_channel(channel.token.clone(), false).await;
+        let result = repo.fetch_channel(channel.token.clone()).await;
         assert!(result.is_err());
     }
 }

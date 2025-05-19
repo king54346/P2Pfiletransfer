@@ -1,7 +1,7 @@
 [package]
 authors = ["The wasm-bindgen Developers"]
 edition = "2021"
-name = "hello_world"
+name = "frontend"
 publish = false
 version = "0.0.0"
 
@@ -13,8 +13,6 @@ wasm-bindgen = "0.2.95"
 web-sys = { version = "0.3.76", features = ["Window", "Document", "Element", "console","File","FileReader","ProgressEvent"] }
 js-sys = "0.3.76"
 serde-pickle = "1.2.0"
-serde = { version = "1.0", features = ["derive"] }
-ndarray = "0.15.4"
 flate2 = "1.0"
 zstd = "0.13"
 snap = "1.0"

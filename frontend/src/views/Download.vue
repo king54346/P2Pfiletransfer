@@ -2,7 +2,7 @@
   <div class="download-page">
     <div class="content-wrapper">
       <WebRTCPeerProvider>
-        <Downloader :uploader-peer-id="channel.uploaderPeerID" />
+        <Downloader :uploader-peer-id="channel.uploaderPeerID" :algorithm="channel.algorithm" />
       </WebRTCPeerProvider>
     </div>
   </div>
@@ -41,7 +41,7 @@ const tokenIsValid = isValidToken(token)
 
 
 // 存储 channel 数据
-const channel = ref<{ uploaderPeerID: string } | null>(null)
+const channel = ref<{ uploaderPeerID: string, algorithm:number } | null>(null)
 
 
 // 使用验证结果
@@ -52,7 +52,7 @@ if (!tokenIsValid) {
 } else {
   // 页面加载时获取数据
   onMounted(async () => {
-    // 获取 channel(peerid,token,secret) 数据
+    // 获取 channel(peerid,token) 数据
     const response = await fetch('http://localhost:3000/api/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

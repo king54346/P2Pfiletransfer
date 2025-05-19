@@ -1,20 +1,20 @@
 {
-  "name": "hello_world",
+  "name": "frontend",
   "type": "module",
   "collaborators": [
     "The wasm-bindgen Developers"
   ],
   "version": "0.0.0",
   "files": [
-    "index_bg.wasm",
-    "index.js",
-    "index_bg.js",
-    "index.d.ts"
+    "frontend_bg.wasm",
+    "frontend.js",
+    "frontend_bg.js",
+    "frontend.d.ts"
   ],
-  "main": "index.js",
-  "types": "index.d.ts",
+  "main": "frontend.js",
+  "types": "frontend.d.ts",
   "sideEffects": [
-    "./index.js",
+    "./frontend.js",
     "./snippets/*"
   ]
 }

@@ -53,7 +53,7 @@ import ReadyToDownload from './ReadyToDownload.vue'
 import ReturnHome from './ReturnHome.vue'
 import {Loading} from "@element-plus/icons-vue";
 
-const props = defineProps<{ uploaderPeerId: string }>()
+const props = defineProps<{ uploaderPeerId: string,algorithm:number }>()
 
 const {
   filesInfo,
@@ -67,7 +67,7 @@ const {
   stopDownload,
   totalSize,
   bytesDownloaded,
-} = useDownloader(props.uploaderPeerId)
+} = useDownloader(props.uploaderPeerId,props.algorithm)
 </script>
 
 <style scoped>

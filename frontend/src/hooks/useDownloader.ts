@@ -5,12 +5,13 @@ import {
     streamDownloadSingleFile,
     streamDownloadMultipleFiles
 } from '../utils/downloadManager'
-import {decompressDataWithFflate} from '../utils/compress'
 
 import {DataConnection} from "peerjs";
 import {useWebRTCPeer} from "../components/useWebRTC";
 import devices from 'vue3-device-detector'
 import {FileInfo} from "../types";
+
+import {CompressionAlgorithm,decompress} from "../../pkg";
 
 const cleanErrorMessage = (errorMessage: string): string =>
     errorMessage.startsWith('Could not connect to peer')
@@ -20,7 +21,7 @@ const cleanErrorMessage = (errorMessage: string): string =>
 const getZipFilename = (): string => `download-${Date.now()}.zip`
 
 
-export function useDownloader(uploaderPeerID: string) {
+export function useDownloader(uploaderPeerID: string,algorithm: number) {
     const { peer } = useWebRTCPeer()
 
     // Reactive states
@@ -55,8 +56,8 @@ export function useDownloader(uploaderPeerID: string) {
         try {
             // 解压数据
             const uint8Array = new Uint8Array(message.bytes as ArrayBuffer)
-            const decompressedData = await decompressDataWithFflate(uint8Array)
-
+            // const decompressedData = await decompressDataWithFflate(uint8Array)
+            const decompressedData = decompress(uint8Array, algorithm as CompressionAlgorithm);
             // 更新下载进度
             bytesDownloaded.value += decompressedData.byteLength
 

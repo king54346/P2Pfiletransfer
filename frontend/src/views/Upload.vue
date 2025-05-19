@@ -27,6 +27,7 @@ import Uploader from "../components/Uploader.vue";
 
 const uploadedFiles = ref([])
 const password = ref('')
+const algorithmSelect = ref(0)
 const uploading = ref(false)
 
 const handleDrop = (file, fileList) => {
@@ -57,6 +58,10 @@ const handleRemoveFile = (index) => {
   uploadedFiles.value.splice(index, 1)
 }
 
+const getAlgorithmKeys= (obj) => {
+  // 过滤出非数字的键（即Gzip, Zstd, Snappy, Lz4）
+  return Object.keys(obj).filter(key => isNaN(parseInt(key)));
+}
 </script>
 
 <template>
@@ -134,19 +139,31 @@ const handleRemoveFile = (index) => {
               </div>
 
               <!-- 输入组件 -->
-              <el-input
-                  v-model="password"
-                  type="password"
-                  show-password
-                  clearable
-                  placeholder="输入secret password"
-                  autofocus
-                  style="width: 100%"
-              >
-                <template #prefix>
-                  <i class="el-icon-lock" style="color: var(--el-text-color-placeholder)"></i>
-                </template>
-              </el-input>
+              <div class="form-row" style="display: flex; gap: 20px; align-items: center;">
+                <el-input
+                    v-model="password"
+                    type="password"
+                    show-password
+                    clearable
+                    placeholder="输入secret password"
+                    autofocus
+                    style="width: 50%">
+                  <template #prefix>
+                    <i class="el-icon-lock" style="color: var(--el-text-color-placeholder)"></i>
+                  </template>
+                </el-input>
+
+                <el-select
+                    v-model="algorithmSelect"
+                    placeholder="选择密码"
+                    style="width: 45%">
+                  <el-option
+                      v-for="key in getAlgorithmKeys(CompressionAlgorithm)"
+                      :key="key"
+                      :label="key"
+                      :value="CompressionAlgorithm[key]" />
+                </el-select>
+              </div>
             </div>
 
             <div class="button-group">
@@ -171,7 +188,7 @@ const handleRemoveFile = (index) => {
       <!-- 上传状态 -->
       <div v-else style="width: 800px">
         <webrtcpeer-provider>
-          <Uploader :files="uploadedFiles" :password="password" @stop="handleStop" />
+          <Uploader :files="uploadedFiles" :password="password" @stop="handleStop" :algorithm="algorithmSelect" />
         </webrtcpeer-provider>
       </div>
     </div>

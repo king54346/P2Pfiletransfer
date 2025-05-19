@@ -5,16 +5,18 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
+    "comlink": "^4.4.2",
     "element-plus": "^2.9.8",
     "fflate": "^0.8.2",
     "peer": "^1.0.0",
     "peerjs": "^1.5.4",
+    "qrcode.vue": "^3.6.0",
     "streamsaver": "^2.0.6",
+    "vite-plugin-top-level-await": "^1.5.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.1",
     "vue3-device-detector": "^1.2.2",
-    "web-streams-polyfill": "^4.0.0",
-    "qrcode.vue": "^3.6.0"
+    "web-streams-polyfill": "^4.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.2",

@@ -11,14 +11,13 @@ function generateURL(token: string): string {
 
 export function useUploaderChannel(
     uploaderPeerID: string,
+    algorithm: number,
     renewInterval = 60_000,
 ) {
     const isLoading = ref(true)
     const error = ref<Error | null>(null)
-    // secret 用于续约，判断secret是否匹配
     const data = ref<{
         token?: string;
-        secret?: string;
     } | null>(null)
 
     const token = computed(() => data.value?.token)
@@ -35,7 +34,7 @@ export function useUploaderChannel(
             const response = await fetch('http://localhost:3000/api/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uploaderPeerID }),
+                body: JSON.stringify({ uploaderPeerID,algorithm }),
             })
 
             if (!response.ok) {
@@ -69,14 +68,14 @@ export function useUploaderChannel(
     let renewalTimeout: ReturnType<typeof setTimeout> | null = null
 
     const renewChannel = async () => {
-        if (!data.value?.secret || !token.value) return
+        if (!token.value) return
 
         try {
             console.log('[UploaderChannel] renewing channel for token', token.value)
             const response = await fetch('http://localhost:3000/api/renew', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: token.value, secret: data.value.secret }),
+                body: JSON.stringify({ token: token.value}),
             })
 
             if (!response.ok) {
@@ -98,13 +97,13 @@ export function useUploaderChannel(
 
     // 监听变化，开始续约流程
     watch(
-        [() => data.value?.secret, () => token.value],
-        ([secret, token]) => {
+        [() => token.value],
+        ([token]) => {
             if (renewalTimeout) {
                 clearTimeout(renewalTimeout)
                 renewalTimeout = null
             }
-            if (secret && token) {
+            if (token) {
                 console.log(
                     '[UploaderChannel] scheduling channel renewal in',
                     renewInterval,
